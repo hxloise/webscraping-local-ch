@@ -1,39 +1,60 @@
-const puppeteer = require('puppeteer');
-const fs = require('fs');
-const axios = require('axios');
+const fs = require('fs')
+const axios = require('axios')
+// const puppeteer = require('puppeteer');
 
-let tabURL = [];
+let tabURL = []
+let nbEstablishments
 
-async function scrapeJSONData(searchTerm, canton) {
+async function scrapeJSONData(searchTerm, city, token) {
 
-    // Effectuer la requête API de local.ch
-    const url = `https://www.local.ch/_next/data/8L8I1bmkv24nfxVIkLIDl/fr/q/${encodeURIComponent(canton)}/${searchTerm}.json?search=q&searchQuery=${encodeURIComponent(canton)}searchQuery=${searchTerm}`;
+    /* ---------------------------------------------------------------
+        Effectuer la requête API de local.ch
+        (PROGRAMME TESTÉ SUR MAX 52 RÉPONSES)
+    --------------------------------------------------------------- */
+
+    const urls = [
+        `https://www.local.ch/_next/data/${token}/fr/q/${encodeURIComponent(city)}/${searchTerm}.json?search=q&searchQuery=${encodeURIComponent(city)}searchQuery=${searchTerm}`,
+        `https://www.local.ch/_next/data/${token}/fr/s/${encodeURIComponent(city)}/${searchTerm}.json?rid=2193ff&search=s&searchQuery=${encodeURIComponent(city)}&searchQuery=${searchTerm}`,
+        `https://www.local.ch/_next/data/${token}/fr/s/${encodeURIComponent(city)}/${searchTerm}.json?rid=2193ff&search=s&page=2&searchQuery=${encodeURIComponent(city)}&searchQuery=${searchTerm}`,
+        `https://www.local.ch/_next/data/${token}/fr/s/${encodeURIComponent(city)}/${searchTerm}.json?rid=2193ff&search=s&page=3&searchQuery=${encodeURIComponent(city)}&searchQuery=${searchTerm}`,
+    ]
+
     try {
-        const response = await axios.get(url);
-        let establishments = response.data.pageProps.data.search.entries
-
-        for (const establishment of establishments) {
-            let contact = establishment.entry.contacts
-            for (const c of contact) {
-                if (c.__typename == "URLContact") {
-                    tabURL.push(c.value)
-                }
+        const responses = await axios.all(urls.map(url => axios.get(url)))
+        for (const response of responses) {
+            if (response.data.pageProps.data !== undefined) {
+                getEstablishments(response)
             }
         }
 
     } catch (error) {
-        console.error('Une erreur est survenue lors du scraping JSON :', error);
+        console.error('Une erreur est survenue lors du scraping JSON :', error)
     }
 
-    const tabURLWithoutDuplicates = tabURL.filter((element, index) => tabURL.indexOf(element) === index);
-    console.log(tabURLWithoutDuplicates);
+    const tabURLWithoutDuplicates = tabURL.filter((element, index) => tabURL.indexOf(element) === index)
+    console.log("Nombre d'établissements : ", nbEstablishments)
+    console.log(tabURLWithoutDuplicates.length === 0 ? "Pas de site web" : tabURLWithoutDuplicates)
+}
 
+function getEstablishments(response) {
+    let establishments = response.data.pageProps.data.search.entries
+    nbEstablishments = response.data.pageProps.data.search.total
+    for (const establishment of establishments) {
+        let contact = establishment.entry.contacts
+        for (const c of contact) {
+            if (c.__typename == "URLContact") {
+                tabURL.push(c.value)
+            }
+        }
+    }
+    return
 }
 
 /* ---------------------------------------------------------------
-    PAS DE MAJUSCULES ET PAS D'ACCENTS DANS LES PARAMÈTRES
-    Par exemple: Ergothérapie, Neuchâtel devient ergotherapie,neuchatel
+    MAJUSCULES ET ACCENTS POSSIBLES DANS LES PARAMÈTRES
+    AJOUTER (CATON) POUR AVOIR DIRECTEMENT PAR CANTON : Neuchâtel(canton)
+    RÉCUPÉRER LE "TOKEN" MANUELLEMENT
 --------------------------------------------------------------- */
 
-scrapeJSONData('ergotherapie', 'geneve');
+scrapeJSONData('Ergothérapie', 'Neuchâtel(canton)', 'nL6VPFs1Mhnq2NkrSdTtY')
 
